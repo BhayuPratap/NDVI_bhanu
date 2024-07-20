@@ -1,0 +1,234 @@
+// Define the region of interest: Rajasthan
+var rajasthan = ee.FeatureCollection('FAO/GAUL/2015/level1')
+                .filter(ee.Filter.eq('ADM1_NAME', 'Rajasthan'));
+
+// Define the time period and the months
+var startDate = ee.Date('2000-01-01');
+var endDate = ee.Date('2023-12-31');
+
+// Load MODIS NDVI data
+var modisNDVI = ee.ImageCollection('MODIS/006/MOD13Q1')
+                .filterDate(startDate, endDate)
+                .filterBounds(rajasthan)
+                .select('NDVI');
+
+// Function to convert 16-bit integer NDVI to 32-bit float and scale it to get original values
+function scaleNDVI(image) {
+  return image.toFloat().multiply(0.0001).copyProperties(image, ['system:time_start']);
+}
+
+// Apply the scaling function to the MODIS NDVI collection
+var scaledNDVI = modisNDVI.map(scaleNDVI);
+
+// Mask out non-positive NDVI values (we assume these are invalid data)
+var maskedNDVI = scaledNDVI.map(function(image) {
+  return image.updateMask(image.select('NDVI').gt(0));
+});
+
+// Function to calculate the average NDVI for a specific month
+function calculateMonthlyNDVI(year, startMonth, endMonth) {
+  var start = ee.Date.fromYMD(year, startMonth, 1);
+  var end = ee.Date.fromYMD(year, endMonth, 1).advance(1, 'month');
+  var monthlyNDVI = maskedNDVI.filterDate(start, end).mean().set('year', year);
+  return monthlyNDVI;
+}
+
+// Generate a list of years from 2000 to 2023
+var years = ee.List.sequence(2000, 2023);
+
+// Function to calculate mean precipitation using CHIRPS data
+function calculateMeanPrecipitation(year) {
+  var start = ee.Date.fromYMD(year, 1, 1);
+  var end = ee.Date.fromYMD(year, 12, 31);
+  var precipCollection = ee.ImageCollection('UCSB-CHG/CHIRPS/PENTAD')
+                          .filterDate(start, end)
+                          .filterBounds(rajasthan)
+                          .select('precipitation');
+  var meanPrecip = precipCollection.mean().set('year', year);
+  return meanPrecip;
+}
+
+// Apply the mean precipitation calculation for each year
+var yearlyPrecipitation = ee.ImageCollection.fromImages(years.map(function(year) {
+  return calculateMeanPrecipitation(year);
+}));
+
+// Print and visualize the yearly mean precipitation
+print(yearlyPrecipitation);
+
+// Calculate NDVI for each month (October, November, December)
+var yearlyOctNDVI = ee.ImageCollection.fromImages(years.map(function(year) {
+  return calculateMonthlyNDVI(year, 10, 10); // October
+}));
+
+var yearlyNovNDVI = ee.ImageCollection.fromImages(years.map(function(year) {
+  return calculateMonthlyNDVI(year, 11, 11); // November
+}));
+
+var yearlyDecNDVI = ee.ImageCollection.fromImages(years.map(function(year) {
+  return calculateMonthlyNDVI(year, 12, 12); // December
+}));
+
+// Create time series charts for NDVI in October, November, December
+var ndviOctChart = ui.Chart.image.seriesByRegion({
+  imageCollection: yearlyOctNDVI,
+  regions: rajasthan,
+  reducer: ee.Reducer.mean(),
+  scale: 500,
+  xProperty: 'year',
+  seriesProperty: 'ADM1_NAME'
+}).setOptions({
+  title: 'Yearly Average NDVI for October (2000-2023)',
+  hAxis: {title: 'Year'},
+  vAxis: {title: 'Average NDVI'},
+  lineWidth: 1,
+  pointSize: 3
+});
+print(ndviOctChart);
+
+var ndviNovChart = ui.Chart.image.seriesByRegion({
+  imageCollection: yearlyNovNDVI,
+  regions: rajasthan,
+  reducer: ee.Reducer.mean(),
+  scale: 500,
+  xProperty: 'year',
+  seriesProperty: 'ADM1_NAME'
+}).setOptions({
+  title: 'Yearly Average NDVI for November (2000-2023)',
+  hAxis: {title: 'Year'},
+  vAxis: {title: 'Average NDVI'},
+  lineWidth: 1,
+  pointSize: 3
+});
+print(ndviNovChart);
+
+var ndviDecChart = ui.Chart.image.seriesByRegion({
+  imageCollection: yearlyDecNDVI,
+  regions: rajasthan,
+  reducer: ee.Reducer.mean(),
+  scale: 500,
+  xProperty: 'year',
+  seriesProperty: 'ADM1_NAME'
+}).setOptions({
+  title: 'Yearly Average NDVI for December (2000-2023)',
+  hAxis: {title: 'Year'},
+  vAxis: {title: 'Average NDVI'},
+  lineWidth: 1,
+  pointSize: 3
+});
+print(ndviDecChart);
+
+// Create a time series chart for mean precipitation
+var precipChart = ui.Chart.image.seriesByRegion({
+  imageCollection: yearlyPrecipitation,
+  regions: rajasthan,
+  reducer: ee.Reducer.mean(),
+  scale: 1000,
+  xProperty: 'year',
+  seriesProperty: 'ADM1_NAME'
+}).setOptions({
+  title: 'Yearly Mean Precipitation (2000-2023)',
+  hAxis: {title: 'Year'},
+  vAxis: {title: 'Mean Precipitation (mm)'},
+  lineWidth: 1,
+  pointSize: 3
+});
+print(precipChart);
+
+// Print and visualize the yearly average NDVI for October to December
+var ndviVis = {min: 0, max: 0.85, palette: ['blue', 'white', 'green']};
+Map.addLayer(maskedNDVI.mean().clip(rajasthan), ndviVis, 'Mean NDVI Oct-Dec 2000-2023');
+
+
+
+
+
+
+// new ory
+
+// Define the region of interest: Rajasthan
+var rajasthan = ee.FeatureCollection('FAO/GAUL/2015/level1')
+                .filter(ee.Filter.eq('ADM1_NAME', 'Rajasthan'));
+
+// Define the time period and the months
+var startDate = ee.Date('2000-01-01');
+var endDate = ee.Date('2023-12-31');
+
+// Generate a list of years from 2000 to 2023
+var years = ee.List.sequence(2000, 2023);
+
+// Function to calculate mean precipitation using CHIRPS data for specific months
+function calculateMonthlyPrecipitation(year, startMonth, endMonth) {
+  var start = ee.Date.fromYMD(year, startMonth, 1);
+  var end = ee.Date.fromYMD(year, endMonth, 1).advance(1, 'month');
+  var precipCollection = ee.ImageCollection('UCSB-CHG/CHIRPS/PENTAD')
+                          .filterDate(start, end)
+                          .filterBounds(rajasthan)
+                          .select('precipitation');
+  var meanPrecip = precipCollection.mean().set('year', year)
+                                           .set('start_month', startMonth)
+                                           .set('end_month', endMonth);
+  return meanPrecip;
+}
+
+// Calculate mean precipitation for October, November, and December for each year
+var yearlyOctPrecip = ee.ImageCollection.fromImages(years.map(function(year) {
+  return calculateMonthlyPrecipitation(year, 10, 10); // October
+}));
+
+var yearlyNovPrecip = ee.ImageCollection.fromImages(years.map(function(year) {
+  return calculateMonthlyPrecipitation(year, 11, 11); // November
+}));
+
+var yearlyDecPrecip = ee.ImageCollection.fromImages(years.map(function(year) {
+  return calculateMonthlyPrecipitation(year, 12, 12); // December
+}));
+
+// Create time series charts for precipitation in October, November, and December
+var precipOctChart = ui.Chart.image.seriesByRegion({
+  imageCollection: yearlyOctPrecip,
+  regions: rajasthan,
+  reducer: ee.Reducer.mean(),
+  scale: 500,
+  xProperty: 'year',
+  seriesProperty: 'ADM1_NAME'
+}).setOptions({
+  title: 'Yearly Mean Precipitation for October (2000-2023)',
+  hAxis: {title: 'Year'},
+  vAxis: {title: 'Mean Precipitation (mm)'},
+  lineWidth: 1,
+  pointSize: 3
+});
+print(precipOctChart);
+
+var precipNovChart = ui.Chart.image.seriesByRegion({
+  imageCollection: yearlyNovPrecip,
+  regions: rajasthan,
+  reducer: ee.Reducer.mean(),
+  scale: 500,
+  xProperty: 'year',
+  seriesProperty: 'ADM1_NAME'
+}).setOptions({
+  title: 'Yearly Mean Precipitation for November (2000-2023)',
+  hAxis: {title: 'Year'},
+  vAxis: {title: 'Mean Precipitation (mm)'},
+  lineWidth: 1,
+  pointSize: 3
+});
+print(precipNovChart);
+
+var precipDecChart = ui.Chart.image.seriesByRegion({
+  imageCollection: yearlyDecPrecip,
+  regions: rajasthan,
+  reducer: ee.Reducer.mean(),
+  scale: 500,
+  xProperty: 'year',
+  seriesProperty: 'ADM1_NAME'
+}).setOptions({
+  title: 'Yearly Mean Precipitation for December (2000-2023)',
+  hAxis: {title: 'Year'},
+  vAxis: {title: 'Mean Precipitation (mm)'},
+  lineWidth: 1,
+  pointSize: 3
+});
+print(precipDecChart);
